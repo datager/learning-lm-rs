@@ -1,3 +1,5 @@
+use std::intrinsics::prefetch_write_instruction;
+
 use crate::tensor::Tensor;
 
 // get (row) vectors from a 2D table given a list of indices
@@ -71,7 +73,23 @@ pub fn masked_softmax(y: &mut Tensor<f32>) {
 }
 
 pub fn rms_norm(y: &mut Tensor<f32>, x: &Tensor<f32>, w: &Tensor<f32>, epsilon: f32) {
-    todo!("实现 rms_norm，计算前做一些必要的检查会帮助你后续调试")
+    let x_len = x.size();
+    let w_len = w.size();
+    let x_lines_cnt = x_len / w_len;
+
+    let mut _y = unsafe { y.data_mut() };
+
+    (0..x_lines_cnt).for_each(|i| {
+        let x_one_line = x.slice(i * w_len, &vec![w_len]);
+        let x_one_line_data = x_one_line.data();
+
+        let sum_squares = x_one_line_data.iter().map(|x| x * x).sum::<f32>();
+        let sqrt = ((sum_squares / w_len as f32) + epsilon).sqrt();
+
+        (0..w_len).for_each(|j| {
+            _y[i * w_len + j] = w.data()[j] * x_one_line_data[j] / sqrt;
+        });
+    })
 }
 
 fn sigmoid(x: f32) -> f32 {

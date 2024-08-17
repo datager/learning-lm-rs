@@ -23,7 +23,12 @@ impl<T: Copy + Clone + Default> Tensor<T> {
         Self::new(data, shape)
     }
 
+    // 按 offset 和 length 取切片
     pub fn data(&self) -> &[T] {
+        // data是个一维数组
+        // 第一步: 先通过 self.data[self.offset..] 从原数组的offset开始, 直到结尾, 取一次切片
+        // 第二步: 再在上一次切片的基础上, 通过 [..self.length] 在新切片的基础上, 从头, 取到 length 的位置, 再取一次切片
+        // 综合而言, 即从原切片的 offset 开始, 取 length 个元素, 取出一个一维数组的切片
         &self.data[self.offset..][..self.length]
     }
 
@@ -36,6 +41,7 @@ impl<T: Copy + Clone + Default> Tensor<T> {
         &self.shape
     }
 
+    // w*h的总length, 是一个数字
     pub fn size(&self) -> usize {
         self.length
     }
@@ -51,6 +57,7 @@ impl<T: Copy + Clone + Default> Tensor<T> {
         self
     }
 
+    // 截取新slice, 本质是 offset+=start, new_length=new_shape.product()
     pub fn slice(&self, start: usize, shape: &Vec<usize>) -> Self {
         let new_length: usize = shape.iter().product();
         assert!(self.offset + start + new_length <= self.length);
@@ -61,8 +68,6 @@ impl<T: Copy + Clone + Default> Tensor<T> {
             length: new_length,
         }
     }
-
-
 }
 
 // Some helper functions for testing and debugging
@@ -74,12 +79,15 @@ impl Tensor<f32> {
         }
         let a = self.data();
         let b = other.data();
-        
+
         return a.iter().zip(b).all(|(x, y)| float_eq(x, y, rel));
     }
     #[allow(unused)]
-    pub fn print(&self){
-        println!("shpae: {:?}, offset: {}, length: {}", self.shape, self.offset, self.length);
+    pub fn print(&self) {
+        println!(
+            "shpae: {:?}, offset: {}, length: {}",
+            self.shape, self.offset, self.length
+        );
         let dim = self.shape()[self.shape().len() - 1];
         let batch = self.length / dim;
         for i in 0..batch {

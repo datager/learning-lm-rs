@@ -171,6 +171,13 @@ pub fn matmul_transb(
     }
 }
 
+pub fn add(x: &mut Tensor<f32>, y: &Tensor<f32>) {
+    let len = x.size();
+    assert_eq!(len, y.size());
+    let mut _x = unsafe { x.data_mut() };
+    (0..len).for_each(|i| _x[i] += y.data()[i])
+}
+
 // Dot product of two tensors (treated as vectors)
 #[allow(unused)]
 pub fn dot(x: &Tensor<f32>, y: &Tensor<f32>) -> f32 {
@@ -302,6 +309,18 @@ fn test_matmul_transb() {
     matmul_transb(&mut c, 1., &a, &b, 1.);
     assert!(c.close_to(
         &Tensor::<f32>::new(vec![15., 34., 35., 81.], &vec![2, 2]),
+        1e-3
+    ));
+}
+
+#[test]
+fn test_add() {
+    let mut a = Tensor::<f32>::new(vec![1., 2., 3., 4.], &vec![2, 2]);
+    let b = Tensor::<f32>::new(vec![5., 6., 7., 8.], &vec![2, 2]);
+    add(&mut a, &b);
+    assert_eq!(a.size(), 4);
+    assert!(a.close_to(
+        &Tensor::<f32>::new(vec![6., 8., 10., 12.], &vec![2, 2]),
         1e-3
     ));
 }

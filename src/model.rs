@@ -28,8 +28,9 @@ impl Llama<f32> {
     pub fn from_safetensors(model_dir: impl AsRef<Path>) -> Self {
         let config = File::open(model_dir.as_ref().join("config.json")).unwrap();
         let config: LlamaConfigJson = serde_json::from_reader(config).unwrap();
-        let model_file = std::fs::read(model_dir.as_ref().join("model.safetensors")).unwrap();
-        let safetensor = SafeTensors::deserialize(&model_file).unwrap();
+        let safetensors_path = model_dir.as_ref().join("model.safetensors"); // 需提前下载好此文件, 放在 models/story/model.safetensors
+        let model_file = std::fs::read(safetensors_path).unwrap();
+        let safetensor = SafeTensors::deserialize(&model_file).unwrap(); // safetensor 文件是数据集, 其长度是2624000个单词, 每个单词都对应一个数字编号, 也会被embedding成一个向量
         let params = LLamaParams::from_safetensors(&safetensor, &config);
 
         Self {

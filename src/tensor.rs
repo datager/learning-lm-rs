@@ -95,6 +95,13 @@ impl Tensor<f32> {
             println!("{:?}", &self.data()[start..][..dim]);
         }
     }
+
+    #[allow(unused)]
+    pub fn print_all(&self, name: &str) {
+        println!("{name}:");
+        self.print();
+        println!();
+    }
 }
 
 #[inline]

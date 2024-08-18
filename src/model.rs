@@ -132,11 +132,11 @@ impl Llama<f32> {
         top_p: f32,
         top_k: u32,
         temperature: f32,
-    ) -> Vec<u32>{
+    ) -> Vec<u32> {
         let mut result = Vec::<u32>::new();
-        
+
         todo!("实现文本生成");
-        
+
         result
     }
 }
@@ -156,6 +156,31 @@ fn self_attention(
     todo!("Implement self_attention");
 }
 
+/*
+   let seq_len = 4;
+   let d = 2;
+   let di = 3;
+   let mut residual = Tensor::<f32>::new(vec![1., 1., 1., 1., 1., 1., 1., 1.], &vec![seq_len, d]); // (4,2)
+   let mut hidden_states = Tensor::<f32>::default(&vec![seq_len, d]); // (4,2)
+   let mut gate_buf = Tensor::<f32>::default(&vec![seq_len, di]); // (4,3)
+   let mut up_buf = Tensor::<f32>::default(&vec![seq_len, di]); // (4,3)
+   let w_up = Tensor::<f32>::new(vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6], &vec![di, d]); // (3,2)
+   let w_down = Tensor::<f32>::new(vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6], &vec![d, di]); // (2,3)
+   let w_gate = Tensor::<f32>::new(vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6], &vec![di, d]); // (3,2)
+   let rms_w = Tensor::<f32>::new(vec![1., 1.], &vec![d]); // (1,2)
+   let eps = 1e-6;
+   mlp(
+       &mut residual,
+       &mut hidden_states,
+       &mut gate_buf,
+       &mut up_buf,
+       &w_up,
+       &w_down,
+       &w_gate,
+       &rms_w,
+       eps,
+   );
+*/
 fn mlp(
     residual: &mut Tensor<f32>,
     hidden_states: &mut Tensor<f32>,
@@ -167,12 +192,49 @@ fn mlp(
     rms_w: &Tensor<f32>,
     eps: f32,
 ) {
-    OP::rms_norm(hidden_states, residual, rms_w, eps);
-    OP::matmul_transb(gate, 0., hidden_states, w_gate, 1.);
-    OP::matmul_transb(up, 0., hidden_states, w_up, 1.);
-    OP::silu(up, gate);
-    OP::matmul_transb(hidden_states, 0., up, w_down, 1.);
-    OP::add(residual, hidden_states);
+    println!("======= before rms_norm, before all of mlp");
+    hidden_states.print_all("hidden_states");
+    residual.print_all("residual");
+    rms_w.print_all("rms_w");
+
+    OP::rms_norm(hidden_states, residual, rms_w, eps); // 通过 residual(4,2) 和 rms_w(1,2), 算出 hidden_states(4,2), 实现了归一化(维度不变)
+
+    println!("======= after rms_norm, before gate");
+    hidden_states.print_all("hidden_states");
+    w_gate.print_all("w_gate");
+    gate.print_all("gate");
+
+    OP::matmul_transb(gate, 0., hidden_states, w_gate, 1.); // 通过 hidden_states(4,2) @ w_gate.T(3,2), 算出 gate(4,3), 即维度变多
+
+    println!("======= after gate, before up");
+    gate.print_all("gate");
+    hidden_states.print_all("hidden_states");
+    w_up.print_all("w_up");
+    up.print_all("up");
+
+    OP::matmul_transb(up, 0., hidden_states, w_up, 1.); // 通过 hidden_states(4,2) @ w_up.T(3,2), 算出 up(4,3), 即维度变多
+
+    println!("======= after up, before silu");
+    up.print_all("up");
+    gate.print_all("gate");
+
+    OP::silu(up, gate); // intermediate = gate * sigmoid(gate) * up, 即 intermediate = silu(up, gate), 即 up[i] = up[i] * gate[i] * sigmoid(gate[i])
+
+    println!("======= after silu, before down");
+    up.print_all("up");
+    w_down.print_all("w_down");
+    hidden_states.print_all("hidden_states");
+
+    OP::matmul_transb(hidden_states, 0., up, w_down, 1.); // up(4,3) @ w_down.T(2,3), 算出 hidden_states(4,2)
+
+    println!("======= after down, before residual");
+    residual.print_all("residual");
+    hidden_states.print_all("hidden_states");
+
+    OP::add(residual, hidden_states); // residual(4,2) element wise 逐元素 和 hidden_states(4,2) 相加, 得到 (4,2), 即维度变少(回到hidden_states的原始维度)
+
+    println!("======= after residual, after all of mlp");
+    residual.print_all("residual");
 }
 
 #[test]
@@ -180,14 +242,14 @@ pub fn test_mlp() {
     let seq_len = 4;
     let d = 2;
     let di = 3;
-    let mut residual = Tensor::<f32>::new(vec![1., 1., 1., 1., 1., 1., 1., 1.], &vec![seq_len, d]);
-    let mut hidden_states = Tensor::<f32>::default(&vec![seq_len, d]);
-    let mut gate_buf = Tensor::<f32>::default(&vec![seq_len, di]);
-    let mut up_buf = Tensor::<f32>::default(&vec![seq_len, di]);
-    let w_up = Tensor::<f32>::new(vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6], &vec![di, d]);
-    let w_down = Tensor::<f32>::new(vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6], &vec![d, di]);
-    let w_gate = Tensor::<f32>::new(vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6], &vec![di, d]);
-    let rms_w = Tensor::<f32>::new(vec![1., 1.], &vec![d]);
+    let mut residual = Tensor::<f32>::new(vec![1., 1., 1., 1., 1., 1., 1., 1.], &vec![seq_len, d]); // (4,2)
+    let mut hidden_states = Tensor::<f32>::default(&vec![seq_len, d]); // (4,2)
+    let mut gate_buf = Tensor::<f32>::default(&vec![seq_len, di]); // (4,3)
+    let mut up_buf = Tensor::<f32>::default(&vec![seq_len, di]); // (4,3)
+    let w_up = Tensor::<f32>::new(vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6], &vec![di, d]); // (3,2)
+    let w_down = Tensor::<f32>::new(vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6], &vec![d, di]); // (2,3)
+    let w_gate = Tensor::<f32>::new(vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6], &vec![di, d]); // (3,2)
+    let rms_w = Tensor::<f32>::new(vec![1., 1.], &vec![d]); // (2)
     let eps = 1e-6;
     mlp(
         &mut residual,
@@ -215,8 +277,8 @@ pub fn test_mlp() {
 
 #[test]
 pub fn test_load_safetensors() {
-    use std::path::PathBuf;
     use crate::tensor::float_eq;
+    use std::path::PathBuf;
     let project_dir = env!("CARGO_MANIFEST_DIR");
     let model_dir = PathBuf::from(project_dir).join("models").join("story");
     let model = Llama::from_safetensors(model_dir);
@@ -228,17 +290,55 @@ pub fn test_load_safetensors() {
     assert_eq!(model.dqkv, 16);
     assert_eq!(model.di, 384);
 
-    assert!(float_eq(&model.params.embedding_table.data()[50], &0.14453125, 1e-6));
-    assert_eq!(model.params.lm_head.data()[10], model.params.embedding_table.data()[10]);
-    assert!(float_eq(&model.params.rms_att_w[0].data()[10], &0.18652344, 1e-6));
-    assert!(float_eq(&model.params.rms_ffn_w[1].data()[10], &0.32421875, 1e-6));
-    assert!(float_eq(&model.params.rms_out_w.data()[100], &0.73046875, 1e-6));
-    assert!(float_eq(&model.params.w_down[0].data()[100], &-0.0625, 1e-6));
+    assert!(float_eq(
+        &model.params.embedding_table.data()[50],
+        &0.14453125,
+        1e-6
+    ));
+    assert_eq!(
+        model.params.lm_head.data()[10],
+        model.params.embedding_table.data()[10]
+    );
+    assert!(float_eq(
+        &model.params.rms_att_w[0].data()[10],
+        &0.18652344,
+        1e-6
+    ));
+    assert!(float_eq(
+        &model.params.rms_ffn_w[1].data()[10],
+        &0.32421875,
+        1e-6
+    ));
+    assert!(float_eq(
+        &model.params.rms_out_w.data()[100],
+        &0.73046875,
+        1e-6
+    ));
+    assert!(float_eq(
+        &model.params.w_down[0].data()[100],
+        &-0.0625,
+        1e-6
+    ));
     assert!(float_eq(&model.params.w_up[0].data()[100], &1.46875, 1e-6));
-    assert!(float_eq(&model.params.w_gate[1].data()[100], &0.296875, 1e-6));
-    assert!(float_eq(&model.params.wq[1].data()[100], &0.032226563, 1e-6));
-    assert!(float_eq(&model.params.wk[1].data()[100], &-0.21386719, 1e-6));
-    assert!(float_eq(&model.params.wv[0].data()[100], &0.041015625, 1e-6));
+    assert!(float_eq(
+        &model.params.w_gate[1].data()[100],
+        &0.296875,
+        1e-6
+    ));
+    assert!(float_eq(
+        &model.params.wq[1].data()[100],
+        &0.032226563,
+        1e-6
+    ));
+    assert!(float_eq(
+        &model.params.wk[1].data()[100],
+        &-0.21386719,
+        1e-6
+    ));
+    assert!(float_eq(
+        &model.params.wv[0].data()[100],
+        &0.041015625,
+        1e-6
+    ));
     assert!(float_eq(&model.params.wo[0].data()[100], &0.01965332, 1e-6));
-
 }

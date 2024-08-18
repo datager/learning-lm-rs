@@ -74,6 +74,14 @@ pub fn rms_norm(y: &mut Tensor<f32>, x: &Tensor<f32>, w: &Tensor<f32>, epsilon: 
     // let mut y = Tensor::<f32>::new(vec![1., 2., 3., 4.], &vec![2, 2]);
     // let x = Tensor::<f32>::new(vec![1., 2., 3., 4.], &vec![2, 2]);
     // let w = Tensor::<f32>::new(vec![1., 2.], &vec![2]);
+    // rms_norm(&mut y, &x, &w, 1e-6);
+    // assert!(y.close_to(
+    //     &Tensor::<f32>::new(
+    //         vec![0.6324554, 2.5298216, 0.8485281, 2.2627416],
+    //         &vec![2, 2]
+    //     ),
+    //     1e-3
+    // ));
 
     // x: 2*2, y: 2*2, w: 1*2
 
